@@ -1,0 +1,68 @@
+name: data_cleaning_env
+version: "1.0.0"
+description: >
+  A real-world OpenEnv environment where an AI agent cleans dirty datasets
+  through sequential actions (fill nulls, replace values, drop rows).
+  Three tasks of increasing difficulty: easy → medium → hard.
+
+action_space:
+  type: discrete
+  actions:
+    - name: fill_null
+      description: Fill all null values in a column with a given value
+      fields:
+        column: string
+        value: any
+    - name: replace
+      description: Replace an old value with a new value in a column
+      fields:
+        column: string
+        old: any
+        new: any
+    - name: drop_row
+      description: Remove a row by its id (or positional index)
+      fields:
+        index: integer
+    - name: done
+      description: Signal that cleaning is complete
+
+observation_space:
+  type: structured
+  fields:
+    task_name: string
+    task_description: string
+    rows: list[dict]
+    column_stats: list[dict]
+    step: integer
+    max_steps: integer
+    last_action_result: string
+    score: float   # [0.0, 1.0]
+    done: boolean
+
+tasks:
+  - name: easy
+    description: Fill all null values in the 'age' column with 0
+    max_steps: 10
+    score_range: [0.0, 1.0]
+    baseline_score: 0.0
+
+  - name: medium
+    description: Normalize phone numbers to (XXX) XXX-XXXX and dates to YYYY-MM-DD
+    max_steps: 20
+    score_range: [0.0, 1.0]
+    baseline_score: 0.5
+
+  - name: hard
+    description: Remove exact duplicate rows and salary outliers (>300000)
+    max_steps: 30
+    score_range: [0.0, 1.0]
+    baseline_score: 0.0
+
+server:
+  port: 7860
+  endpoints:
+    reset: POST /reset
+    step:  POST /step
+    state: GET  /state
+    health: GET /health
+
