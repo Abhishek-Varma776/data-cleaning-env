@@ -9,13 +9,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source
 COPY . .
 
-# Environment defaults
+# Environment defaults (optional, but fine)
 ENV TASK_NAME=easy
-ENV HOST=0.0.0.0
-ENV PORT=7860
-ENV WORKERS=2
 
 EXPOSE 7860
 
-CMD uvicorn server.app:main --host $HOST --port $PORT --workers $WORKERS
-
+# Correct entrypoint (IMPORTANT)
+CMD ["uvicorn", "server.app:main", "--host", "0.0.0.0", "--port", "7860"]
