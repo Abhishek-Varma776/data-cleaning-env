@@ -66,3 +66,4 @@ server:
     state: GET  /state
     health: GET /health
 
+entrypoint: server.app:main
