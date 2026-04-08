@@ -65,7 +65,7 @@ def _obs_to_dict(obs, reward=0.0, done=False, info=None):
 
 @app.get("/")
 def root():
-    return {"message": "Running 🚀"}
+    return {"message": "Data Cleaning Environment is running 🚀"}
 
 
 @app.get("/health")
