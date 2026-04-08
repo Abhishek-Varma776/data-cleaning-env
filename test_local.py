@@ -3,7 +3,7 @@ test_local.py — Run before deploying to HF Spaces.
 
 Usage:
     # Start the server first:
-    uvicorn server.app:app --host 0.0.0.0 --port 8000
+    uvicorn server.app:main --host 0.0.0.0 --port 8000
 
     # Then in another terminal:
     python test_local.py

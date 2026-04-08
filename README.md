@@ -73,7 +73,7 @@ Max steps: 30 | Baseline score: 0.0
 ### Local (uvicorn)
 ```bash
 pip install -r requirements.txt
-TASK_NAME=easy uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload
+TASK_NAME=easy uvicorn server.app:main --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Docker
