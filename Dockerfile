@@ -18,3 +18,4 @@ ENV WORKERS=2
 EXPOSE 7860
 
 CMD uvicorn server.app:main --host $HOST --port $PORT --workers $WORKERS
+
