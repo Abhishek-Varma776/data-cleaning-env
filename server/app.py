@@ -1,12 +1,12 @@
 """
 FastAPI server for the Data Cleaning OpenEnv environment.
-Exposes: POST /reset, POST /step, GET /state, GET /health
 """
 
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # add project root
+# Add project root
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -16,21 +16,20 @@ from typing import Any, Optional
 from server.environment import DataCleaningEnvironment
 from models import DataCleaningAction, StepResult
 
-# ── Task selection via env var (default: easy) ─────────────────────────────────
+# Task selection
 TASK_NAME = os.getenv("TASK_NAME", "easy")
 
 env = DataCleaningEnvironment(task_name=TASK_NAME)
 
 app = FastAPI(
     title="Data Cleaning OpenEnv",
-    description="An OpenEnv environment where an AI agent cleans dirty datasets.",
     version="1.0.0",
 )
 
-# ── Request / Response schemas ─────────────────────────────────────────────────
+# ── Schemas ─────────────────────────────────
 
 class ResetRequest(BaseModel):
-    task_name: Optional[str] = None   # override task at reset time
+    task_name: Optional[str] = None
 
 
 class StepRequest(BaseModel):
@@ -42,42 +41,50 @@ class StepRequest(BaseModel):
     index: Optional[int] = None
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ── Helper ─────────────────────────────────
 
-def _obs_to_dict(obs, reward: float = 0.0, done: bool = False, info: dict = None) -> dict:
+def _obs_to_dict(obs, reward=0.0, done=False, info=None):
     return {
         "observation": {
-            "task_name":          obs.task_name,
-            "task_description":   obs.task_description,
-            "rows":               obs.rows,
-            "column_stats":       obs.column_stats,
-            "step":               obs.step,
-            "max_steps":          obs.max_steps,
+            "task_name": obs.task_name,
+            "task_description": obs.task_description,
+            "rows": obs.rows,
+            "column_stats": obs.column_stats,
+            "step": obs.step,
+            "max_steps": obs.max_steps,
             "last_action_result": obs.last_action_result,
-            "score":              obs.score,
+            "score": obs.score,
         },
         "reward": reward,
-        "done":   done,
-        "info":   info or {},
+        "done": done,
+        "info": info or {},
     }
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────
 
 @app.get("/")
 def root():
-    return {"message": "Data Cleaning Environment is running 🚀"}
+    return {"message": "Running 🚀"}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.post("/reset")
 def reset(req: ResetRequest = ResetRequest()):
     global env
     task = req.task_name or TASK_NAME
+
     if task not in ("easy", "medium", "hard"):
-        raise HTTPException(status_code=400, detail=f"Unknown task '{task}'")
+        raise HTTPException(status_code=400, detail="Invalid task")
+
     env = DataCleaningEnvironment(task_name=task)
     obs = env.reset()
-    return JSONResponse(content=_obs_to_dict(obs, reward=0.0, done=False), status_code=200)
+
+    return JSONResponse(content=_obs_to_dict(obs), status_code=200)
 
 
 @app.post("/step")
@@ -90,9 +97,16 @@ def step(req: StepRequest):
         new=req.new,
         index=req.index,
     )
+
     result: StepResult = env.step(action)
+
     return JSONResponse(
-        content=_obs_to_dict(result.observation, result.reward, result.done, result.info),
+        content=_obs_to_dict(
+            result.observation,
+            result.reward,
+            result.done,
+            result.info
+        ),
         status_code=200
     )
 
@@ -102,15 +116,13 @@ def state():
     s = env.state
     return {
         "task_name": s.task_name,
-        "step":      s.step,
-        "score":     s.score,
-        "done":      s.done,
+        "step": s.step,
+        "score": s.score,
+        "done": s.done,
     }
 
+
+# ── REQUIRED FOR OPENENV ───────────────────
+
 def main():
-    import uvicorn
-    uvicorn.run("server.app:main", host="0.0.0.0", port=7860)
-
-
-if __name__ == "__main__":
-    main()
+    return app
