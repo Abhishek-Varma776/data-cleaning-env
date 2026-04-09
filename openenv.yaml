@@ -36,7 +36,7 @@ observation_space:
     step: integer
     max_steps: integer
     last_action_result: string
-    score: float   # [0.0, 1.0]
+    score: float   # (0.01, 0.99)
     done: boolean
 
 tasks:
