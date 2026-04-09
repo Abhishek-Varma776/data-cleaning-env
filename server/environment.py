@@ -55,79 +55,76 @@ TASKS = {
 
 def _easy_dataset() -> List[Dict[str, Any]]:
     return [
-        {"id": 1, "name": "Alice",   "age": 30},
-        {"id": 2, "name": "Bob",     "age": None},
-        {"id": 3, "name": "Carol",   "age": None},
-        {"id": 4, "name": "Dave",    "age": 25},
-        {"id": 5, "name": "Eve",     "age": None},
+        {"id": 1, "name": "Alice", "age": 30},
+        {"id": 2, "name": "Bob",   "age": None},
+        {"id": 3, "name": "Carol", "age": None},
+        {"id": 4, "name": "Dave",  "age": 25},
+        {"id": 5, "name": "Eve",   "age": None},
     ]
 
 def _medium_dataset() -> List[Dict[str, Any]]:
     return [
-        {"id": 1, "name": "Alice",  "phone": "(512) 555-1234", "date": "2024-01-15"},
-        {"id": 2, "name": "Bob",    "phone": "512.555.5678",   "date": "15/01/2024"},
-        {"id": 3, "name": "Carol",  "phone": "5125559012",     "date": "2024-03-22"},
-        {"id": 4, "name": "Dave",   "phone": "512-555-3456",   "date": "22/03/2024"},
-        {"id": 5, "name": "Eve",    "phone": "(512) 555-7890", "date": "2024-07-04"},
+        {"id": 1, "name": "Alice", "phone": "(512) 555-1234", "date": "2024-01-15"},
+        {"id": 2, "name": "Bob",   "phone": "512.555.5678",   "date": "15/01/2024"},
+        {"id": 3, "name": "Carol", "phone": "5125559012",     "date": "2024-03-22"},
+        {"id": 4, "name": "Dave",  "phone": "512-555-3456",   "date": "22/03/2024"},
+        {"id": 5, "name": "Eve",   "phone": "(512) 555-7890", "date": "2024-07-04"},
     ]
 
 def _hard_dataset() -> List[Dict[str, Any]]:
     return [
-        {"id": 1, "name": "Alice",  "dept": "Eng",   "salary": 95000},
-        {"id": 2, "name": "Bob",    "dept": "Sales",  "salary": 60000},
-        {"id": 3, "name": "Carol",  "dept": "Eng",   "salary": 500000},   # outlier
-        {"id": 4, "name": "Dave",   "dept": "HR",    "salary": 55000},
-        {"id": 5, "name": "Bob",    "dept": "Sales",  "salary": 60000},   # duplicate of row 2
-        {"id": 6, "name": "Eve",    "dept": "Eng",   "salary": 88000},
-        {"id": 7, "name": "Alice",  "dept": "Eng",   "salary": 95000},   # duplicate of row 1
-        {"id": 8, "name": "Frank",  "dept": "Sales",  "salary": 9999999}, # extreme outlier
+        {"id": 1, "name": "Alice", "dept": "Eng",   "salary": 95000},
+        {"id": 2, "name": "Bob",   "dept": "Sales", "salary": 60000},
+        {"id": 3, "name": "Carol", "dept": "Eng",   "salary": 500000},  # outlier
+        {"id": 4, "name": "Dave",  "dept": "HR",    "salary": 55000},
+        {"id": 5, "name": "Bob",   "dept": "Sales", "salary": 60000},   # dup of row 2
+        {"id": 6, "name": "Eve",   "dept": "Eng",   "salary": 88000},
+        {"id": 7, "name": "Alice", "dept": "Eng",   "salary": 95000},   # dup of row 1
+        {"id": 8, "name": "Frank", "dept": "Sales", "salary": 9999999}, # extreme outlier
     ]
+
+# ── Clamp helper — MUST be defined before graders ─────────────────────────────
+
+def _clamp(score: float) -> float:
+    """Ensure score is STRICTLY inside (0, 1). Validator rejects 0.0 and 1.0."""
+    if score <= 0.0:
+        return 0.01
+    if score >= 1.0:
+        return 0.99
+    return round(score, 2)
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
 class EasyGrader:
-    """Full score when all nulls in 'age' are filled with 0."""
-
     def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
-        total_nulls_original = 3  # rows 2, 3, 5
-        filled = sum(
-            1 for r in rows
-            if r.get("age") is not None
-        )
-        # All rows must be non-null and correct type
         correct = sum(
             1 for r in rows
-            if r.get("age") is not None and isinstance(r["age"], int)
+            if r.get("age") is not None and isinstance(r["age"], (int, float))
         )
-        score = correct / len(rows)
+        raw  = correct / len(rows) if rows else 0.0
         done = all(r.get("age") is not None for r in rows)
-        return round(score, 2), done
+        return _clamp(raw), done          # ← clamp applied here
 
 
 class MediumGrader:
-    """Partial credit per normalized phone + date value."""
-
     PHONE_RE = re.compile(r"^\(\d{3}\) \d{3}-\d{4}$")
     DATE_RE  = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
     def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
-        total = len(rows)
+        total    = len(rows)
         phone_ok = sum(1 for r in rows if self.PHONE_RE.match(str(r.get("phone", ""))))
         date_ok  = sum(1 for r in rows if self.DATE_RE.match(str(r.get("date", ""))))
-        score = (phone_ok + date_ok) / (2 * total)
+        raw  = (phone_ok + date_ok) / (2 * total) if total else 0.0
         done = phone_ok == total and date_ok == total
-        return round(score, 2), done
+        return _clamp(raw), done          # ← clamp applied here
 
 
 class HardGrader:
-    """Score based on removing all duplicates and all salary outliers (>300000)."""
-
     SALARY_THRESHOLD = 300000
 
     def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
-        # Identify duplicates by (name, dept, salary)
-        seen = set()
-        has_dup = False
+        seen        = set()
+        has_dup     = False
         has_outlier = any(r.get("salary", 0) > self.SALARY_THRESHOLD for r in rows)
         for r in rows:
             key = (r.get("name"), r.get("dept"), r.get("salary"))
@@ -138,23 +135,10 @@ class HardGrader:
 
         no_dup     = not has_dup
         no_outlier = not has_outlier
-
-        score = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
+        raw  = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
         done = no_dup and no_outlier
-        return round(score, 2), done
+        return _clamp(raw), done          # ← clamp applied here
 
-def _clamp_score(score: float) -> float:
-    """Ensure score is strictly between 0 and 1.
-
-    Validation requires scores not equal to 0.0 or 1.0, so map boundary
-    values to a small epsilon inside (0,1).
-    """
-    if score <= 0.0:
-        return 0.01
-    if score >= 1.0:
-        return 0.99
-    # Keep two-decimal precision for reporting
-    return round(score, 2)
 
 GRADERS = {
     "easy":   EasyGrader(),
@@ -171,10 +155,6 @@ DATASET_FACTORIES = {
 # ── Environment ────────────────────────────────────────────────────────────────
 
 class DataCleaningEnvironment:
-    """
-    OpenEnv-compatible environment.
-    Stateful: holds current dataset and step count.
-    """
 
     def __init__(self, task_name: str = "easy"):
         assert task_name in TASKS, f"Unknown task '{task_name}'. Choose from {list(TASKS)}"
@@ -183,16 +163,15 @@ class DataCleaningEnvironment:
         self._grader    = GRADERS[task_name]
         self._rows: List[Dict[str, Any]] = []
         self._step  = 0
-        self._score = 0.0
+        self._score = 0.01
         self._done  = False
-
-    # ── Public API ─────────────────────────────────────────────────────────────
 
     def reset(self) -> DataCleaningObservation:
         self._rows  = copy.deepcopy(DATASET_FACTORIES[self._task_name]())
         self._step  = 0
-        self._score = 0.0
         self._done  = False
+        score, _    = self._grader.grade(self._rows)   # already clamped
+        self._score = score
         return self._make_obs("Environment reset. Ready for actions.")
 
     def step(self, action: DataCleaningAction) -> StepResult:
@@ -206,8 +185,7 @@ class DataCleaningEnvironment:
         result_msg, reward = self._apply_action(action)
 
         graded_score, graded_done = self._grader.grade(self._rows)
-        graded_score = _clamp_score(graded_score)
-        self._score = graded_score
+        self._score = graded_score   # already clamped inside grade()
 
         if action.action_type == "done":
             self._done = True
@@ -216,17 +194,11 @@ class DataCleaningEnvironment:
             self._done = True
             result_msg += " (max steps reached)"
 
-        info = {
-            "step": self._step,
-            "graded_score": graded_score,
-            "action_type": action.action_type,
-        }
-
         return StepResult(
             observation=self._make_obs(result_msg),
             reward=reward,
             done=self._done,
-            info=info,
+            info={"step": self._step, "graded_score": graded_score, "action_type": action.action_type},
         )
 
     @property
@@ -242,7 +214,6 @@ class DataCleaningEnvironment:
 
     def _apply_action(self, action: DataCleaningAction) -> Tuple[str, float]:
         atype = action.action_type
-
         if atype == "fill_null":
             return self._fill_null(action.column, action.value)
         elif atype == "replace":
@@ -250,9 +221,7 @@ class DataCleaningEnvironment:
         elif atype == "drop_row":
             return self._drop_row(action.index)
         elif atype == "done":
-            score, _ = self._grader.grade(self._rows)
-            score = _clamp_score(score)
-            return f"Done signalled. Final score: {score:.2f}", 0.0
+            return f"Done signalled. Score: {self._score:.2f}", 0.0
         else:
             return f"Unknown action_type '{atype}'", -0.05
 
@@ -266,7 +235,7 @@ class DataCleaningEnvironment:
                 filled += 1
         if filled > 0:
             return f"Filled {filled} null(s) in '{column}' with {value!r}", 0.1 * filled
-        return f"No nulls found in '{column}'", 0.01
+        return f"No nulls found in '{column}'", -0.02
 
     def _replace(self, column: Optional[str], old: Any, new: Any) -> Tuple[str, float]:
         if column is None:
@@ -284,15 +253,13 @@ class DataCleaningEnvironment:
         if index is None:
             return "drop_row requires 'index'", -0.05
         matching = [i for i, r in enumerate(self._rows) if r.get("id") == index]
-        if not matching:
-            # also try positional index
-            if 0 <= index < len(self._rows):
-                self._rows.pop(index)
-                return f"Dropped row at position {index}", 0.2
-            return f"No row with id or position {index}", -0.05
-        pos = matching[0]
-        self._rows.pop(pos)
-        return f"Dropped row with id={index}", 0.2
+        if matching:
+            self._rows.pop(matching[0])
+            return f"Dropped row with id={index}", 0.2
+        if 0 <= index < len(self._rows):
+            self._rows.pop(index)
+            return f"Dropped row at position {index}", 0.2
+        return f"No row with id or position {index}", -0.05
 
     def _col_stats(self) -> List[Dict[str, Any]]:
         if not self._rows:
@@ -300,23 +267,19 @@ class DataCleaningEnvironment:
         columns = list(self._rows[0].keys())
         stats = []
         for col in columns:
-            vals = [r.get(col) for r in self._rows]
-            nulls = sum(1 for v in vals if v is None)
+            vals   = [r.get(col) for r in self._rows]
+            nulls  = sum(1 for v in vals if v is None)
             unique = len(set(str(v) for v in vals if v is not None))
             sample = [v for v in vals if v is not None][:3]
-            dtype = type(sample[0]).__name__ if sample else "unknown"
+            dtype  = type(sample[0]).__name__ if sample else "unknown"
             stats.append({
-                "name": col,
-                "dtype": dtype,
-                "null_count": nulls,
-                "unique_count": unique,
-                "sample_values": sample,
+                "name": col, "dtype": dtype,
+                "null_count": nulls, "unique_count": unique, "sample_values": sample,
             })
         return stats
 
     def _make_obs(self, msg: str) -> DataCleaningObservation:
-        score, _ = self._grader.grade(self._rows) if self._rows else (0.0, False)
-        score = _clamp_score(score)
+        score, _ = self._grader.grade(self._rows) if self._rows else (0.01, False)
         return DataCleaningObservation(
             task_name=self._task_name,
             task_description=self._task["description"],
@@ -328,4 +291,3 @@ class DataCleaningEnvironment:
             done=self._done,
             score=score,
         )
-
