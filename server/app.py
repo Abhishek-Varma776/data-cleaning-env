@@ -70,7 +70,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "healthy"}          # ← FIXED: was "ok"
 
 
 @app.post("/reset")
