@@ -143,6 +143,18 @@ class HardGrader:
         done = no_dup and no_outlier
         return round(score, 2), done
 
+def _clamp_score(score: float) -> float:
+    """Ensure score is strictly between 0 and 1.
+
+    Validation requires scores not equal to 0.0 or 1.0, so map boundary
+    values to a small epsilon inside (0,1).
+    """
+    if score <= 0.0:
+        return 0.01
+    if score >= 1.0:
+        return 0.99
+    # Keep two-decimal precision for reporting
+    return round(score, 2)
 
 GRADERS = {
     "easy":   EasyGrader(),
@@ -194,6 +206,7 @@ class DataCleaningEnvironment:
         result_msg, reward = self._apply_action(action)
 
         graded_score, graded_done = self._grader.grade(self._rows)
+        graded_score = _clamp_score(graded_score)
         self._score = graded_score
 
         if action.action_type == "done":
@@ -238,6 +251,7 @@ class DataCleaningEnvironment:
             return self._drop_row(action.index)
         elif atype == "done":
             score, _ = self._grader.grade(self._rows)
+            score = _clamp_score(score)
             return f"Done signalled. Final score: {score:.2f}", 0.0
         else:
             return f"Unknown action_type '{atype}'", -0.05
@@ -302,6 +316,7 @@ class DataCleaningEnvironment:
 
     def _make_obs(self, msg: str) -> DataCleaningObservation:
         score, _ = self._grader.grade(self._rows) if self._rows else (0.0, False)
+        score = _clamp_score(score)
         return DataCleaningObservation(
             task_name=self._task_name,
             task_description=self._task["description"],
