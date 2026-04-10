@@ -86,8 +86,8 @@ def _hard_dataset() -> List[Dict[str, Any]]:
 # ── Clamp helper ───────────────────────────────────────────────────────────────
 
 def _clamp(score: float) -> float:
-    """Ensure score is STRICTLY inside (0, 1). Validator rejects 0.0 and 1.0."""
-    return max(0.01, min(0.99, round(score, 2)))
+    """Clamp score to strictly between 0.1 and 0.9."""
+    return max(0.1, min(0.9, round(score, 2)))
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
@@ -97,9 +97,10 @@ class EasyGrader:
             1 for r in rows
             if r.get("age") is not None and isinstance(r["age"], (int, float))
         )
-        raw  = correct / len(rows) if rows else 0.0
-        done = all(r.get("age") is not None for r in rows)
-        return _clamp(raw), done
+        raw   = correct / len(rows) if rows else 0.0
+        done  = all(r.get("age") is not None for r in rows)
+        score = max(0.1, min(0.9, round(raw, 2)))
+        return score, done
 
 
 class MediumGrader:
@@ -110,9 +111,10 @@ class MediumGrader:
         total    = len(rows)
         phone_ok = sum(1 for r in rows if self.PHONE_RE.match(str(r.get("phone", ""))))
         date_ok  = sum(1 for r in rows if self.DATE_RE.match(str(r.get("date", ""))))
-        raw  = (phone_ok + date_ok) / (2 * total) if total else 0.0
-        done = phone_ok == total and date_ok == total
-        return _clamp(raw), done
+        raw   = (phone_ok + date_ok) / (2 * total) if total else 0.0
+        done  = phone_ok == total and date_ok == total
+        score = max(0.1, min(0.9, round(raw, 2)))
+        return score, done
 
 
 class HardGrader:
@@ -131,9 +133,10 @@ class HardGrader:
 
         no_dup     = not has_dup
         no_outlier = not has_outlier
-        raw  = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
-        done = no_dup and no_outlier
-        return _clamp(raw), done
+        raw   = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
+        done  = no_dup and no_outlier
+        score = max(0.1, min(0.9, round(raw, 2)))
+        return score, done
 
 
 GRADERS = {
@@ -159,7 +162,7 @@ class DataCleaningEnvironment:
         self._grader    = GRADERS[task_name]
         self._rows: List[Dict[str, Any]] = []
         self._step  = 0
-        self._score = 0.01
+        self._score = 0.1
         self._done  = False
 
     def reset(self) -> DataCleaningObservation:
@@ -275,7 +278,7 @@ class DataCleaningEnvironment:
         return stats
 
     def _make_obs(self, msg: str) -> DataCleaningObservation:
-        score, _ = self._grader.grade(self._rows) if self._rows else (0.01, False)
+        score, _ = self._grader.grade(self._rows) if self._rows else (0.1, False)
         return DataCleaningObservation(
             task_name=self._task_name,
             task_description=self._task["description"],
