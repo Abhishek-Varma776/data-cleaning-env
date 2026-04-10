@@ -83,15 +83,11 @@ def _hard_dataset() -> List[Dict[str, Any]]:
         {"id": 8, "name": "Frank", "dept": "Sales", "salary": 9999999}, # extreme outlier
     ]
 
-# ── Clamp helper — MUST be defined before graders ─────────────────────────────
+# ── Clamp helper ───────────────────────────────────────────────────────────────
 
 def _clamp(score: float) -> float:
     """Ensure score is STRICTLY inside (0, 1). Validator rejects 0.0 and 1.0."""
-    if score <= 0.0:
-        return 0.01
-    if score >= 1.0:
-        return 0.99
-    return round(score, 2)
+    return max(0.01, min(0.99, round(score, 2)))
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +99,7 @@ class EasyGrader:
         )
         raw  = correct / len(rows) if rows else 0.0
         done = all(r.get("age") is not None for r in rows)
-        return _clamp(raw), done          # ← clamp applied here
+        return _clamp(raw), done
 
 
 class MediumGrader:
@@ -116,7 +112,7 @@ class MediumGrader:
         date_ok  = sum(1 for r in rows if self.DATE_RE.match(str(r.get("date", ""))))
         raw  = (phone_ok + date_ok) / (2 * total) if total else 0.0
         done = phone_ok == total and date_ok == total
-        return _clamp(raw), done          # ← clamp applied here
+        return _clamp(raw), done
 
 
 class HardGrader:
@@ -137,7 +133,7 @@ class HardGrader:
         no_outlier = not has_outlier
         raw  = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
         done = no_dup and no_outlier
-        return _clamp(raw), done          # ← clamp applied here
+        return _clamp(raw), done
 
 
 GRADERS = {
@@ -170,7 +166,7 @@ class DataCleaningEnvironment:
         self._rows  = copy.deepcopy(DATASET_FACTORIES[self._task_name]())
         self._step  = 0
         self._done  = False
-        score, _    = self._grader.grade(self._rows)   # already clamped
+        score, _    = self._grader.grade(self._rows)
         self._score = score
         return self._make_obs("Environment reset. Ready for actions.")
 
@@ -185,7 +181,7 @@ class DataCleaningEnvironment:
         result_msg, reward = self._apply_action(action)
 
         graded_score, graded_done = self._grader.grade(self._rows)
-        self._score = graded_score   # already clamped inside grade()
+        self._score = graded_score
 
         if action.action_type == "done":
             self._done = True
