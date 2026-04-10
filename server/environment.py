@@ -86,8 +86,12 @@ def _hard_dataset() -> List[Dict[str, Any]]:
 # ── Clamp helper ───────────────────────────────────────────────────────────────
 
 def _clamp(score: float) -> float:
-    """Clamp score to strictly between 0.1 and 0.9."""
-    return max(0.1, min(0.9, round(score, 2)))
+    """Clamp score to be strictly between 0.01 and 0.99.
+
+    Rounds to 2 decimal places and enforces a tiny epsilon away from 0 and 1
+    so validators that reject exact 0.0/1.0 will pass.
+    """
+    return max(0.01, min(0.99, round(score, 2)))
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
@@ -99,7 +103,7 @@ class EasyGrader:
         )
         raw   = correct / len(rows) if rows else 0.0
         done  = all(r.get("age") is not None for r in rows)
-        score = max(0.1, min(0.9, round(raw, 2)))
+        score = _clamp(round(raw, 2))
         return score, done
 
 
@@ -113,7 +117,7 @@ class MediumGrader:
         date_ok  = sum(1 for r in rows if self.DATE_RE.match(str(r.get("date", ""))))
         raw   = (phone_ok + date_ok) / (2 * total) if total else 0.0
         done  = phone_ok == total and date_ok == total
-        score = max(0.1, min(0.9, round(raw, 2)))
+        score = _clamp(round(raw, 2))
         return score, done
 
 
@@ -135,7 +139,7 @@ class HardGrader:
         no_outlier = not has_outlier
         raw   = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
         done  = no_dup and no_outlier
-        score = max(0.1, min(0.9, round(raw, 2)))
+        score = _clamp(round(raw, 2))
         return score, done
 
 
@@ -162,7 +166,7 @@ class DataCleaningEnvironment:
         self._grader    = GRADERS[task_name]
         self._rows: List[Dict[str, Any]] = []
         self._step  = 0
-        self._score = 0.1
+        self._score = _clamp(0.0)
         self._done  = False
 
     def reset(self) -> DataCleaningObservation:
@@ -278,7 +282,7 @@ class DataCleaningEnvironment:
         return stats
 
     def _make_obs(self, msg: str) -> DataCleaningObservation:
-        score, _ = self._grader.grade(self._rows) if self._rows else (0.1, False)
+        score, _ = self._grader.grade(self._rows) if self._rows else (_clamp(0.0), False)
         return DataCleaningObservation(
             task_name=self._task_name,
             task_description=self._task["description"],

@@ -160,7 +160,7 @@ def run_task(task_name: str) -> None:
             if done:
                 break
 
-        final_score = float(obs.get("score", 0.0))
+        final_score = float(obs.get("score", 0.01))
         success = final_score >= SUCCESS_SCORE_THRESHOLD
 
     finally:

@@ -49,7 +49,7 @@ class DataCleaningObservation(Observation):
     max_steps: int
     last_action_result: str
     done: bool
-    score: float = Field(description="Current score in [0.0, 1.0]")
+    score: float = Field(..., description="Current score strictly between 0 and 1 (exclusive)", gt=0, lt=1)
 
 
 # ── State ──────────────────────────────────────────────────────────────────────
