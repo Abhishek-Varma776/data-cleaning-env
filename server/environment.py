@@ -86,12 +86,12 @@ def _hard_dataset() -> List[Dict[str, Any]]:
 # ── Clamp helper ───────────────────────────────────────────────────────────────
 
 def _clamp(score: float) -> float:
-    """Clamp score to be strictly between 0.01 and 0.99.
+    """Clamp score to be strictly between 0.1 and 0.9.
 
-    Rounds to 2 decimal places and enforces a tiny epsilon away from 0 and 1
-    so validators that reject exact 0.0/1.0 will pass.
+    Rounds to 2 decimal places and enforces bounds away from 0 and 1
+    to satisfy validator requirements.
     """
-    return max(0.01, min(0.99, round(score, 2)))
+    return max(0.1, min(0.9, round(score, 2)))
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
