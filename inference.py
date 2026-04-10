@@ -29,6 +29,8 @@ MAX_STEPS    = 15
 TEMPERATURE  = 0.2
 MAX_TOKENS   = 300
 SUCCESS_SCORE_THRESHOLD = 0.5   # scores are in (0.01, 0.99) so use 0.5 as midpoint
+MIN_VALID_SCORE = 0.01
+MAX_VALID_SCORE = 0.99
 
 # Run all 3 tasks so validator sees 3 graded task scores
 ALL_TASKS = ["easy", "medium", "hard"]
@@ -47,9 +49,27 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(task: str, success: bool, score: float, steps: int, rewards: List[float]) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+    print(
+        f"[END] task={task} success={str(success).lower()} score={score:.2f} steps={steps} rewards={rewards_str}",
+        flush=True,
+    )
+
+
+def normalize_score(raw_score: Any) -> float:
+    """Return a score guaranteed to be strictly inside (0, 1)."""
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        score = MIN_VALID_SCORE
+
+    score = max(MIN_VALID_SCORE, min(MAX_VALID_SCORE, score))
+    if score <= 0.0:
+        return MIN_VALID_SCORE
+    if score >= 1.0:
+        return MAX_VALID_SCORE
+    return round(score, 4)
 
 # ── Prompts ─────────────────────────────────────────────────────────
 
@@ -126,6 +146,7 @@ def run_task(task_name: str) -> None:
     history:     List[str]   = []
     steps_taken: int         = 0
     success:     bool        = False
+    final_score: float       = MIN_VALID_SCORE
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
@@ -160,12 +181,12 @@ def run_task(task_name: str) -> None:
             if done:
                 break
 
-        final_score = float(obs.get("score", 0.1))
+        final_score = normalize_score(obs.get("score", MIN_VALID_SCORE))
         success = final_score >= SUCCESS_SCORE_THRESHOLD
 
     finally:
         # Always emitted even on exception
-        log_end(success, steps_taken, rewards)
+        log_end(task_name, success, final_score, steps_taken, rewards)
 
 
 # ── Main — runs ALL 3 tasks ──────────────────────────────────────────
