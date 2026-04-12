@@ -9,6 +9,7 @@ Three tasks of increasing difficulty:
 
 import copy
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from models import (
@@ -85,62 +86,118 @@ def _hard_dataset() -> List[Dict[str, Any]]:
 
 # ── Clamp helper ───────────────────────────────────────────────────────────────
 
+MIN_SCORE = 0.01
+MAX_SCORE = 0.99
+PREMATURE_DONE_PENALTY = 0.05
+
 def _clamp(score: float) -> float:
-    """Clamp score to be strictly between 0.1 and 0.9.
+    """Clamp score to be strictly between 0.01 and 0.99.
 
     Rounds to 2 decimal places and enforces bounds away from 0 and 1
     to satisfy validator requirements.
     """
-    return max(0.1, min(0.9, round(score, 2)))
+    return max(MIN_SCORE, min(MAX_SCORE, round(score, 2)))
 
 # ── Graders ────────────────────────────────────────────────────────────────────
 
 class EasyGrader:
-    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
+    def evaluate(self, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total = len(rows)
+        missing_age = sum(1 for r in rows if r.get("age") is None)
         correct = sum(
             1 for r in rows
             if r.get("age") is not None and isinstance(r["age"], (int, float))
         )
-        raw   = correct / len(rows) if rows else 0.0
-        done  = all(r.get("age") is not None for r in rows)
-        score = _clamp(round(raw, 2))
-        return score, done
+        raw = correct / total if total else 0.0
+        done = missing_age == 0
+        return {
+            "raw_score": raw,
+            "task_complete": done,
+            "details": {
+                "age_missing_values": missing_age,
+                "age_non_null_ratio": round(raw, 3),
+            },
+        }
+
+    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
+        evaluation = self.evaluate(rows)
+        return _clamp(evaluation["raw_score"]), bool(evaluation["task_complete"])
 
 
 class MediumGrader:
     PHONE_RE = re.compile(r"^\(\d{3}\) \d{3}-\d{4}$")
     DATE_RE  = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
-        total    = len(rows)
+    def _is_valid_iso_date(self, value: Any) -> bool:
+        text = str(value)
+        if not self.DATE_RE.match(text):
+            return False
+        try:
+            datetime.strptime(text, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+
+    def evaluate(self, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        total = len(rows)
         phone_ok = sum(1 for r in rows if self.PHONE_RE.match(str(r.get("phone", ""))))
-        date_ok  = sum(1 for r in rows if self.DATE_RE.match(str(r.get("date", ""))))
-        raw   = (phone_ok + date_ok) / (2 * total) if total else 0.0
-        done  = phone_ok == total and date_ok == total
-        score = _clamp(round(raw, 2))
-        return score, done
+        date_ok = sum(1 for r in rows if self._is_valid_iso_date(r.get("date", "")))
+        phone_accuracy = (phone_ok / total) if total else 0.0
+        date_accuracy = (date_ok / total) if total else 0.0
+        raw = (phone_accuracy + date_accuracy) / 2
+        done = phone_ok == total and date_ok == total if total else False
+        return {
+            "raw_score": raw,
+            "task_complete": done,
+            "details": {
+                "phone_format_accuracy": round(phone_accuracy, 3),
+                "date_format_accuracy": round(date_accuracy, 3),
+                "phone_rows_correct": phone_ok,
+                "date_rows_correct": date_ok,
+            },
+        }
+
+    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
+        evaluation = self.evaluate(rows)
+        return _clamp(evaluation["raw_score"]), bool(evaluation["task_complete"])
 
 
 class HardGrader:
     SALARY_THRESHOLD = 300000
 
-    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
-        seen        = set()
-        has_dup     = False
-        has_outlier = any(r.get("salary", 0) > self.SALARY_THRESHOLD for r in rows)
+    def _is_outlier(self, salary: Any) -> bool:
+        try:
+            return float(salary) > self.SALARY_THRESHOLD
+        except (TypeError, ValueError):
+            return False
+
+    def evaluate(self, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        seen = set()
+        duplicate_rows = 0
         for r in rows:
             key = (r.get("name"), r.get("dept"), r.get("salary"))
             if key in seen:
-                has_dup = True
-                break
-            seen.add(key)
+                duplicate_rows += 1
+            else:
+                seen.add(key)
 
-        no_dup     = not has_dup
-        no_outlier = not has_outlier
-        raw   = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
-        done  = no_dup and no_outlier
-        score = _clamp(round(raw, 2))
-        return score, done
+        outlier_rows = sum(1 for r in rows if self._is_outlier(r.get("salary")))
+        no_dup = duplicate_rows == 0
+        no_outlier = outlier_rows == 0
+        raw = (0.5 * int(no_dup)) + (0.5 * int(no_outlier))
+        done = no_dup and no_outlier
+        return {
+            "raw_score": raw,
+            "task_complete": done,
+            "details": {
+                "duplicate_rows_remaining": duplicate_rows,
+                "outlier_rows_remaining": outlier_rows,
+            },
+        }
+
+    def grade(self, rows: List[Dict[str, Any]]) -> Tuple[float, bool]:
+        evaluation = self.evaluate(rows)
+        return _clamp(evaluation["raw_score"]), bool(evaluation["task_complete"])
 
 
 GRADERS = {
@@ -165,15 +222,22 @@ class DataCleaningEnvironment:
         self._task      = TASKS[task_name]
         self._grader    = GRADERS[task_name]
         self._rows: List[Dict[str, Any]] = []
-        self._step  = 0
+        self._step = 0
         self._score = _clamp(0.0)
-        self._done  = False
+        self._done = False
+        self._initial_missing_values = 0
+        self._initial_row_count = 0
+        self._initial_raw_score = 0.0
 
     def reset(self) -> DataCleaningObservation:
-        self._rows  = copy.deepcopy(DATASET_FACTORIES[self._task_name]())
-        self._step  = 0
-        self._done  = False
-        score, _    = self._grader.grade(self._rows)
+        self._rows = copy.deepcopy(DATASET_FACTORIES[self._task_name]())
+        self._step = 0
+        self._done = False
+        evaluation = self._grader.evaluate(self._rows)
+        self._initial_raw_score = float(evaluation["raw_score"])
+        self._initial_missing_values = self._count_missing_values(self._rows)
+        self._initial_row_count = len(self._rows)
+        score, _ = self._grader.grade(self._rows)
         self._score = score
         return self._make_obs("Environment reset. Ready for actions.")
 
@@ -187,21 +251,39 @@ class DataCleaningEnvironment:
         self._step += 1
         result_msg, reward = self._apply_action(action)
 
-        graded_score, graded_done = self._grader.grade(self._rows)
+        graded_evaluation = self._grader.evaluate(self._rows)
+        graded_score = _clamp(float(graded_evaluation["raw_score"]))
+        graded_done = bool(graded_evaluation["task_complete"])
         self._score = graded_score
 
         if action.action_type == "done":
+            if not graded_done:
+                reward -= PREMATURE_DONE_PENALTY
+                result_msg = (
+                    f"Done signalled before task completion. "
+                    f"Final score: {graded_score:.2f}"
+                )
+            else:
+                result_msg = f"Done signalled. Task complete at {graded_score:.2f}"
             self._done = True
 
         if self._step >= self._task["max_steps"]:
             self._done = True
             result_msg += " (max steps reached)"
 
+        info = {
+            "step": self._step,
+            "graded_score": graded_score,
+            "action_type": action.action_type,
+            "task_complete": graded_done,
+            "evaluation": self._evaluation_metrics(graded_evaluation),
+        }
+
         return StepResult(
             observation=self._make_obs(result_msg),
             reward=reward,
             done=self._done,
-            info={"step": self._step, "graded_score": graded_score, "action_type": action.action_type},
+            info=info,
         )
 
     @property
@@ -212,6 +294,10 @@ class DataCleaningEnvironment:
             score=self._score,
             done=self._done,
         )
+
+    @property
+    def evaluation_metrics(self) -> Dict[str, Any]:
+        return self._evaluation_metrics()
 
     # ── Internal helpers ───────────────────────────────────────────────────────
 
@@ -224,7 +310,7 @@ class DataCleaningEnvironment:
         elif atype == "drop_row":
             return self._drop_row(action.index)
         elif atype == "done":
-            return f"Done signalled. Score: {self._score:.2f}", 0.0
+            return "Done signal received.", 0.0
         else:
             return f"Unknown action_type '{atype}'", -0.05
 
@@ -263,6 +349,38 @@ class DataCleaningEnvironment:
             self._rows.pop(index)
             return f"Dropped row at position {index}", 0.2
         return f"No row with id or position {index}", -0.05
+
+    def _count_missing_values(self, rows: List[Dict[str, Any]]) -> int:
+        return sum(1 for row in rows for value in row.values() if value is None)
+
+    def _evaluation_metrics(self, graded_evaluation: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        if graded_evaluation is None:
+            graded_evaluation = self._grader.evaluate(self._rows)
+
+        raw_score = float(graded_evaluation["raw_score"])
+        missing_current = self._count_missing_values(self._rows)
+        missing_initial = self._initial_missing_values
+        if missing_initial > 0:
+            missing_reduction = (missing_initial - missing_current) / missing_initial
+        else:
+            missing_reduction = 0.0
+
+        quality_gain = raw_score - self._initial_raw_score
+        metrics = {
+            "data_quality_score": round(max(0.0, min(1.0, raw_score)) * 100.0, 2),
+            "quality_gain": round(quality_gain * 100.0, 2),
+            "missing_values_initial": missing_initial,
+            "missing_values_current": missing_current,
+            "missing_value_reduction": round(max(0.0, min(1.0, missing_reduction)), 3),
+            "rows_initial": self._initial_row_count,
+            "rows_current": len(self._rows),
+            "rows_removed": max(0, self._initial_row_count - len(self._rows)),
+        }
+
+        details = graded_evaluation.get("details", {})
+        if details:
+            metrics["task_details"] = details
+        return metrics
 
     def _col_stats(self) -> List[Dict[str, Any]]:
         if not self._rows:

@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from server.environment import DataCleaningEnvironment
 from models import DataCleaningAction, StepResult
@@ -43,7 +43,7 @@ class StepRequest(BaseModel):
 
 # ── Helper ─────────────────────────────────
 
-def _obs_to_dict(obs, reward=0.0, done=False, info=None):
+def _obs_to_dict(obs, reward: float = 0.0, done: bool = False, info: Optional[Dict[str, Any]] = None):
     return {
         "observation": {
             "task_name": obs.task_name,
@@ -65,7 +65,15 @@ def _obs_to_dict(obs, reward=0.0, done=False, info=None):
 
 @app.get("/")
 def root():
-    return {"message": "Data Cleaning Environment is running 🚀"}
+    return {
+        "message": "Data Cleaning Environment is running",
+        "quick_start": {
+            "reset": "POST /reset {\"task_name\": \"easy\"}",
+            "step": "POST /step {\"action_type\": \"fill_null\", \"column\": \"age\", \"value\": 0}",
+            "finish": "POST /step {\"action_type\": \"done\"}",
+            "health": "GET /health",
+        },
+    }
 
 
 @app.get("/health")
@@ -84,7 +92,16 @@ def reset(req: ResetRequest = ResetRequest()):
     env = DataCleaningEnvironment(task_name=task)
     obs = env.reset()
 
-    return JSONResponse(content=_obs_to_dict(obs), status_code=200)
+    return JSONResponse(
+        content=_obs_to_dict(
+            obs,
+            info={
+                "evaluation": env.evaluation_metrics,
+                "tip": "Use /step repeatedly, then call action_type='done' to finalize.",
+            },
+        ),
+        status_code=200,
+    )
 
 
 @app.post("/step")

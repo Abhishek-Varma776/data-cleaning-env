@@ -137,3 +137,72 @@ data_cleaning_env/
     └── environment.py    ← Task logic + graders
 ```
 
+# 🚀 Enhanced Hackathon Presentation
+
+## Problem Statement (Real-World Impact)
+Dirty tabular data slows analytics, breaks dashboards, and causes bad decisions in operations, finance, and ML pipelines. Teams lose hours on repetitive cleaning steps that are ideal for autonomous agents.
+
+## Solution (What This Environment Proves)
+This OpenEnv submission turns data cleaning into a sequential decision task where an AI agent must:
+1. Inspect dataset state
+2. Choose one safe cleaning action
+3. Observe reward + quality metrics
+4. Iterate until quality is restored
+
+It demonstrates measurable improvement, not just action execution.
+
+## AI Agent Behavior (Judge-Friendly)
+- `easy`: learns to fill nulls in the right column only
+- `medium`: learns format normalization for phone/date fields
+- `hard`: learns structural cleanup by removing duplicates and outliers
+- Agent is discouraged from premature termination (`done` before completion is penalized)
+
+## Architecture (Simple Flow)
+`Agent -> /reset -> observation(rows + stats + score) -> /step(action) -> reward + updated observation + evaluation metrics -> repeat -> done`
+
+## Evaluation Metrics (Visible in API `info.evaluation`)
+- `data_quality_score` (0-100)
+- `quality_gain` (improvement from initial state)
+- `missing_value_reduction` (0-1)
+- `rows_removed`
+- Task-specific diagnostics (for example: `phone_format_accuracy`, `duplicate_rows_remaining`)
+
+## Example Results (Before vs After)
+| Task | Before | After | Outcome |
+|------|--------|-------|---------|
+| easy | 3 missing `age` values, quality `40.0` | 0 missing, quality `100.0` | Fully cleaned |
+| medium | mixed phone/date formats, quality `50.0` | normalized formats, quality `100.0` | Fully standardized |
+| hard | duplicates + salary outliers, quality `0.0` | no duplicates/outliers, quality `100.0` | Fully sanitized |
+
+## Demo in <10 Seconds
+1. Open Space URL (or local server root) and verify health: `GET /health`
+2. Start episode: `POST /reset {"task_name":"easy"}`
+3. Clean once: `POST /step {"action_type":"fill_null","column":"age","value":0}`
+4. Finalize: `POST /step {"action_type":"done"}`
+5. Show judge: `observation.score` + `info.evaluation`
+
+## Hugging Face Demo UX Tips
+- Use `easy` task first for instant win in one action
+- Highlight `info.evaluation.missing_value_reduction` jumping to `1.0`
+- Show root endpoint (`/`) quick-start payload for immediate API guidance
+- For reliability demo, run `python test_local.py` before `openenv push`
+
+## Sample Input / Output Snapshot
+Input action:
+```json
+{"action_type":"fill_null","column":"age","value":0}
+```
+Output highlights:
+```json
+{
+  "reward": 0.3,
+  "observation": {"score": 0.99},
+  "info": {
+    "evaluation": {
+      "data_quality_score": 100.0,
+      "missing_value_reduction": 1.0
+    }
+  }
+}
+```
+
